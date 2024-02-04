@@ -109,13 +109,14 @@ class NetworkApplication:
 
 class ICMPPing(NetworkApplication):
     def makeICMPPacket(self, ID):
-        icmpHeader = struct.pack('bbHHh', 8, 0, 0, ID, 1)
+        self.seq_num += 1
+        icmpHeader = struct.pack('!BBHHH', 8, 0, 0, ID ,self.seq_num)
         icmpData = b'JIAJUNdaBEST' 
         icmpCheckSum = self.checksum(icmpHeader + icmpData)
-        icmpHeader = struct.pack('bbHHh', 8, 0, icmpCheckSum, ID, 1)
+        icmpHeader = struct.pack('!BBHHH', 8, 0, socket.htons(icmpCheckSum), ID, self.seq_num)
         icmpPacket = icmpHeader + icmpData
-
         return icmpPacket
+    
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout):
         try:
             startTime = time.time()
@@ -123,9 +124,10 @@ class ICMPPing(NetworkApplication):
             endTime = time.time()
 
             receivedICMP = receivedPacket[20:28]
-            Type, Code, checksum, packetID, sequence = struct.unpack('bbHHh', receivedICMP)
+            Type, Code, checksum, packetID, sequence = struct.unpack('!BBHHH', receivedICMP)
             ttl = struct.unpack('B', receivedPacket[8:9])[0]
             
+            #print(f'ID {ID} | Packet ID {packetID}')
             if address[0] == destinationAddress and packetID == ID:
                 if (endTime - startTime) * 1000 > timeout:
                     print("Round-trip timeout", timeout)
@@ -159,11 +161,11 @@ class ICMPPing(NetworkApplication):
         return receivePing
 
     def __init__(self, args):
+        self.seq_num = 0
         print('Ping to: %s...' % (args.hostname))
         # 1. Look up hostname, resolving it to an IP address
         destinationIP = socket.gethostbyname(args.hostname)
         minimumDelay, maximumDelay, lostPackets, total = float('inf'), 0, 0, 0
-
         # 2. Repeat below args.count times
         for i in range(args.count):
             # 3. Call doOnePing function, approximately every second, below is just an example
@@ -182,11 +184,12 @@ class ICMPPing(NetworkApplication):
                 lostPackets += 1
             time.sleep(1)
         lostPercentage = (lostPackets / args.count) * 100
-        averageDelay = total / (args.count) - lostPackets
+        averageDelay = total / ((args.count) - lostPackets)
         self.printAdditionalDetails(lostPercentage, minimumDelay, averageDelay, maximumDelay)
 
 class Traceroute(NetworkApplication):
     def __init__(self, args):
+        self.seq_num = 0
         print('Traceroute to: %s...' % (args.hostname))
         self.protocol = args.protocol.lower()
         destinationAddress = socket.gethostbyname(args.hostname)  
@@ -208,10 +211,11 @@ class Traceroute(NetworkApplication):
         return udpSocket
     
     def makeICMPPacket(self):
-        icmpHeader = struct.pack('bbHHh', 8, 0, 0, 1, 1) 
+        self.seq_num += 1
+        icmpHeader = struct.pack('!BBHHH', 8, 0, 0, 1, self.seq_num) 
         icmpData = b'JIAJUNdaBEST'
         icmpChecksum = self.checksum(icmpHeader + icmpData)
-        icmpHeader = struct.pack('bbHHh', 8, 0, icmpChecksum, 1, 1)
+        icmpHeader = struct.pack('!BBHHH', 8, 0, socket.htons(icmpChecksum), 1, self.seq_num)
         icmpPacket = icmpHeader + icmpData
         return icmpPacket
     
@@ -276,28 +280,57 @@ class Traceroute(NetworkApplication):
         return reached
     
 class WebServer(NetworkApplication):
+    def handleRequest(self, tcpSocket):
+        try:
+            # Receive request message from the client on connection socket
+            requestMessage = tcpSocket.recv(1024).decode("utf-8")
+            print("Received request:", requestMessage)  # Print the received request
+            
+            # Split the request message by newline characters to handle multiline requests
+            request_lines = requestMessage.split("\r\n")
+            # Extract the path of the requested object from the first line of the HTTP header
+            request_line = request_lines[0]
+            method, path, _ = request_line.split(" ", 2)                
+            filePath = path.strip('/')
+            
+            # Read the corresponding file from disk
+            with open(filePath, 'rb') as file:
+                content = file.read()
+            
+            # Send HTTP response header
+            responseHeader = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n"
+            tcpSocket.sendall(responseHeader.encode())
+            
+            # Send the content of the file to the socket
+            tcpSocket.sendall(content)
+            print("Sent response for", filePath)  # Print the sent response
+        except (FileNotFoundError, ValueError) as e:
+            # Send HTTP 404 response if file not found or if the request is incomplete or malformed
+            response404Header = b"HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>\n"
+            tcpSocket.send(response404Header)
+            print("Sent 404 response")
+        finally:
+            # Close the connection socket
+            tcpSocket.close()
+            print("Connection closed")
 
-    def handleRequest(tcpSocket):
-        # 1. Receive request message from the client on connection socket
-        # 2. Extract the path of the requested object from the message (second part of the HTTP header)
-        # 3. Read the corresponding file from disk
-        # 4. Store in temporary buffer
-        # 5. Send the correct HTTP response error
-        # 6. Send the content of the file to the socket
-        # 7. Close the connection socket
-        pass
 
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
-        # 1. Create server socket
-        # 2. Bind the server socket to server address and server port
-        # 3. Continuously listen for connections to server socket
-        # 4. When a connection is accepted, call handleRequest function, passing new connection socket (see https://docs.python.org/3/library/socket.html#socket.socket.accept)
-        # 5. Close server socket
-
+        # Create server socket
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Bind the server socket to server address and server port
+        server.bind(('localhost', args.port))
+        # Continuously listen for connections to server socket
+        server.listen()
+        while True:
+            clientSocket, clientAddress = server.accept()
+            print("Accepted connection from:", clientAddress)  # Print when a connection is accepted
+            thread = threading.Thread(target=self.handleRequest, args=(clientSocket,))
+            thread.start()
+            print("Started thread for handling request")
 
 class Proxy(NetworkApplication):
-
     def __init__(self, args):
         print('Web Proxy starting on port: %i...' % (args.port))
 
