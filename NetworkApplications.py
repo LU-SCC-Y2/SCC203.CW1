@@ -282,50 +282,48 @@ class Traceroute(NetworkApplication):
 class WebServer(NetworkApplication):
     def handleRequest(self, tcpSocket):
         try:
-            # Receive request message from the client on connection socket
             requestMessage = tcpSocket.recv(1024).decode("utf-8")
-            print("Received request:", requestMessage)  # Print the received request
-            
-            # Split the request message by newline characters to handle multiline requests
+            print("Received request:", requestMessage)  
             request_lines = requestMessage.split("\r\n")
-            # Extract the path of the requested object from the first line of the HTTP header
             request_line = request_lines[0]
-            method, path, _ = request_line.split(" ", 2)                
+            _, path, _ = request_line.split(" ", 2)                
             filePath = path.strip('/')
             
-            # Read the corresponding file from disk
             with open(filePath, 'rb') as file:
                 content = file.read()
             
-            # Send HTTP response header
-            responseHeader = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\n\r\n"
-            tcpSocket.sendall(responseHeader.encode())
+            current_time = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime())
+            file_stats = os.stat(filePath)
+            last_modified = time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.gmtime(file_stats.st_mtime))
             
-            # Send the content of the file to the socket
+            responseHeader = (
+                "HTTP/1.1 200 OK\r\n"
+                "Server: SimpleHTTP/0.6 Python/3.12.0\r\n"
+                "Date: {}\r\n"
+                "Content-type: text/html\r\n"
+                "Content-Length: {}\r\n"
+                "Last-Modified: {}\r\n"
+                "Connection: keep-alive\r\n\r\n".format(current_time, len(content), last_modified)
+            )
+            tcpSocket.sendall(responseHeader.encode())            
             tcpSocket.sendall(content)
-            print("Sent response for", filePath)  # Print the sent response
-        except (FileNotFoundError, ValueError) as e:
-            # Send HTTP 404 response if file not found or if the request is incomplete or malformed
+            print("Sent response for", filePath)  
+
+        except (FileNotFoundError):
             response404Header = b"HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>\n"
             tcpSocket.send(response404Header)
             print("Sent 404 response")
         finally:
-            # Close the connection socket
             tcpSocket.close()
-            print("Connection closed")
-
 
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
-        # Create server socket
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # Bind the server socket to server address and server port
         server.bind(('localhost', args.port))
-        # Continuously listen for connections to server socket
         server.listen()
         while True:
             clientSocket, clientAddress = server.accept()
-            print("Accepted connection from:", clientAddress)  # Print when a connection is accepted
+            print("Accepted connection from:", clientAddress)  
             thread = threading.Thread(target=self.handleRequest, args=(clientSocket,))
             thread.start()
             print("Started thread for handling request")
@@ -333,7 +331,9 @@ class WebServer(NetworkApplication):
 class Proxy(NetworkApplication):
     def __init__(self, args):
         print('Web Proxy starting on port: %i...' % (args.port))
-
+    def handleRequest(self, tcpSocket):
+        
+        pass
 # Do not delete or modify the code below
 if __name__ == "__main__":
     args = setupArgumentParser()
