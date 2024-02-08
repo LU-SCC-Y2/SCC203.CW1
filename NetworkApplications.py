@@ -330,10 +330,50 @@ class WebServer(NetworkApplication):
 
 class Proxy(NetworkApplication):
     def __init__(self, args):
+        self.cache = {}
         print('Web Proxy starting on port: %i...' % (args.port))
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(('localhost', args.port))
+        server.listen()
+        while True:
+            clientSocket, clientAddress = server.accept()
+            self.handleRequest(clientSocket)
+
     def handleRequest(self, tcpSocket):
-        
+        try:
+            requestMessage = tcpSocket.recv(1024).decode("utf-8")
+            request_lines = requestMessage.split("\r\n")
+            request_line = request_lines[0]
+            _, path, _ = request_line.split(" ", 2)                
+            filePath = path.strip('/')
+
+            if filePath in self.cache:
+                response = self.cache[filePath]
+                print("CacheResponse: ", response)
+                tcpSocket.sendall(response)
+            else:
+                proxyServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                proxyServer.connect(('localhost', 8000))
+                proxyServer.sendall(requestMessage.encode()) #send to server
+
+                responseFromServer = b""
+                while True:
+                    data = proxyServer.recv(1024)
+                    if not data:
+                        break
+                    responseFromServer += data
+
+                tcpSocket.sendall(responseFromServer)
+                self.cache[filePath] = responseFromServer
+
+        except FileNotFoundError:
+            response404Header = b"HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>\n"
+            tcpSocket.send(response404Header)
+            print("Sent 404 response")
+        finally:
+            tcpSocket.close()
         pass
+
 # Do not delete or modify the code below
 if __name__ == "__main__":
     args = setupArgumentParser()
