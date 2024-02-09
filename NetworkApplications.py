@@ -286,8 +286,7 @@ class WebServer(NetworkApplication):
             print("Received request:", requestMessage)  
             request_lines = requestMessage.split("\r\n")
             request_line = request_lines[0]
-            _, path, _ = request_line.split(" ", 2)                
-            filePath = path.strip('/')
+            filePath= (request_line.split(" ")[1]).strip('/')              
             
             with open(filePath, 'rb') as file:
                 content = file.read()
@@ -344,17 +343,25 @@ class Proxy(NetworkApplication):
             requestMessage = tcpSocket.recv(1024).decode("utf-8")
             request_lines = requestMessage.split("\r\n")
             request_line = request_lines[0]
-            _, path, _ = request_line.split(" ", 2)                
-            filePath = path.strip('/')
+            path = request_line.split(" ")[1]    
+            print("This is path:", path)    
 
-            if filePath in self.cache:
-                response = self.cache[filePath]
-                print("CacheResponse: ", response)
+            if "http://" in path:
+                hostname, port = self.extract_host_and_port(path)
+                print("This is hostname:", hostname)
+            else:
+                hostname, port = "localhost", 8000
+                print("Local: ", self.extract_host_and_port(path))
+                print("This is hostname:", hostname)
+
+            if path in self.cache:
+                response = self.cache[path]
+                print("CacheResponse:", response)
                 tcpSocket.sendall(response)
             else:
                 proxyServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                proxyServer.connect(('localhost', 8000))
-                proxyServer.sendall(requestMessage.encode()) #send to server
+                proxyServer.connect((hostname, port))
+                proxyServer.sendall(requestMessage.encode())
 
                 responseFromServer = b""
                 while True:
@@ -364,7 +371,7 @@ class Proxy(NetworkApplication):
                     responseFromServer += data
 
                 tcpSocket.sendall(responseFromServer)
-                self.cache[filePath] = responseFromServer
+                self.cache[path] = responseFromServer
 
         except FileNotFoundError:
             response404Header = b"HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>\n"
@@ -372,7 +379,32 @@ class Proxy(NetworkApplication):
             print("Sent 404 response")
         finally:
             tcpSocket.close()
-        pass
+        
+    def extract_host_and_port(self, url):
+        http_pos = url.find('://')
+        if http_pos == -1:
+            temp = url
+        else:
+            temp = url[(http_pos + 3):]
+
+        port_pos = temp.find(':')
+        webserver_pos = temp.find('/')
+        
+        if webserver_pos == -1:
+            webserver_pos = len(temp)
+
+        webserver = ""
+        port = -1
+
+        if port_pos == -1 or webserver_pos < port_pos:
+            port = 80
+            webserver = temp[:webserver_pos]
+        else:
+            port = int((temp[(port_pos + 1):])[:webserver_pos - port_pos - 1])
+            webserver = temp[:port_pos]
+        return webserver, port
+
+
 
 # Do not delete or modify the code below
 if __name__ == "__main__":
