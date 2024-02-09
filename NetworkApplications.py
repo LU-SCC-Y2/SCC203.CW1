@@ -336,7 +336,8 @@ class Proxy(NetworkApplication):
         server.listen()
         while True:
             clientSocket, clientAddress = server.accept()
-            self.handleRequest(clientSocket)
+            thread = threading.Thread(target=self.handleRequest, args=(clientSocket,))
+            thread.start()
 
     def handleRequest(self, tcpSocket):
         try:
@@ -403,7 +404,6 @@ class Proxy(NetworkApplication):
             port = int((temp[(port_pos + 1):])[:webserver_pos - port_pos - 1])
             webserver = temp[:port_pos]
         return webserver, port
-
 
 
 # Do not delete or modify the code below
