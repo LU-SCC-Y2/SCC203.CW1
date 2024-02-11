@@ -315,6 +315,7 @@ class WebServer(NetworkApplication):
         finally:
             tcpSocket.close()
 
+
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -345,15 +346,16 @@ class Proxy(NetworkApplication):
             request_lines = requestMessage.split("\r\n")
             request_line = request_lines[0]
             path = request_line.split(" ")[1]    
-            print("This is path:", path)    
+            # print("This is path:", path)    
 
             if "http://" in path:
                 hostname, port = self.extract_host_and_port(path)
-                print("This is hostname:", hostname)
+                # print("This is hostname:", hostname)
+                # print("this is port: ", port)
             else:
                 hostname, port = "localhost", 8000
-                print("Local: ", self.extract_host_and_port(path))
-                print("This is hostname:", hostname)
+                # print("Local: ", self.extract_host_and_port(path))
+                # print("This is hostname:", hostname)
 
             if path in self.cache:
                 response = self.cache[path]
