@@ -266,7 +266,7 @@ class Traceroute(NetworkApplication):
                 except socket.herror:
                     destinationHostname = ''
 
-                # self.printOneResult(address[0], len(receivedPacket), delay, i, ttlive, destinationHostname)
+                self.printOneResult(address[0], len(receivedPacket), delay, i, ttlive, destinationHostname)
 
             except socket.timeout:
                 delays.append(None)
@@ -343,25 +343,22 @@ class Proxy(NetworkApplication):
     def handleRequest(self, tcpSocket):
         try:
             requestMessage = tcpSocket.recv(1024).decode("utf-8")
+            print("\nRequested Message:\n", requestMessage)
             request_lines = requestMessage.split("\r\n")
             request_line = request_lines[0]
             path = request_line.split(" ")[1]    
-            # print("This is path:", path)    
 
             if "http://" in path:
                 hostname, port = self.extract_host_and_port(path)
-                # print("This is hostname:", hostname)
-                # print("this is port: ", port)
             else:
-                hostname, port = "localhost", 8000
-                # print("Local: ", self.extract_host_and_port(path))
-                # print("This is hostname:", hostname)
-
+                hostname, port = "localhost", 8080
             if path in self.cache:
+                print("Found in cache. Sending Cache Response...")
                 response = self.cache[path]
                 print("CacheResponse:", response)
                 tcpSocket.sendall(response)
             else:
+                print(f"Not found in cache! Forwarding to target server on port {port}...")
                 proxyServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 proxyServer.connect((hostname, port))
                 proxyServer.sendall(requestMessage.encode())
@@ -374,6 +371,7 @@ class Proxy(NetworkApplication):
                     responseFromServer += data
 
                 tcpSocket.sendall(responseFromServer)
+                print("Response from server: ", responseFromServer)
                 self.cache[path] = responseFromServer
 
         except FileNotFoundError:
