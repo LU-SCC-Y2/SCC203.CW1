@@ -53,7 +53,6 @@ def setupArgumentParser() -> argparse.Namespace:
         args = parser.parse_args()
         return args
 
-
 class NetworkApplication:
     def checksum(self, dataToChecksum: bytes) -> int:
         csum = 0
@@ -250,7 +249,7 @@ class Traceroute(NetworkApplication):
                 
                 Type, Code, checksum, packetID, sequence = struct.unpack('bbHHh', receivedICMP)
                 ttlive = struct.unpack('B', receivedPacket[8:9])[0]
-                print(f"TTL of received packet: {ttlive} Type : {Type}")
+                # print(f"TTL of received packet: {ttlive} Type : {Type}")
 
                 if Type == 0 and protocol == "icmp": 
                     reached = True
@@ -297,7 +296,7 @@ class WebServer(NetworkApplication):
             
             responseHeader = (
                 "HTTP/1.1 200 OK\r\n"
-                "Server: SimpleHTTP/0.6 Python/3.12.0\r\n"
+                #"Server: SimpleHTTP/0.6 Python/3.12.0\r\n"
                 "Date: {}\r\n"
                 "Content-type: text/html\r\n"
                 "Content-Length: {}\r\n"
@@ -360,7 +359,7 @@ class Proxy(NetworkApplication):
             else:
                 print(f"Not found in cache! Forwarding to target server on port {port}...")
                 proxyServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                proxyServer.connect((hostname, port))
+                proxyServer.connect((hostname, port)) #port is either 80 or 8080
                 proxyServer.sendall(requestMessage.encode())
 
                 responseFromServer = b""
