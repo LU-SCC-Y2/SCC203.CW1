@@ -192,7 +192,7 @@ class Traceroute(NetworkApplication):
         print('Traceroute to: %s...' % (args.hostname))
         self.protocol = args.protocol.lower()
         destinationAddress = socket.gethostbyname(args.hostname)  
-        for ttl in range(1, 31): 
+        for ttl in range(1, 65): 
             reached = self.doTraceroute(destinationAddress, ttl, args, self.protocol)
             if reached:
                 break
